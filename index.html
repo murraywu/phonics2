@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>倪珮萱的自然拼读 Pro - V17 全功能版</title>
+    <title>自然拼读 Pro - 倪珮萱</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.21/mammoth.browser.min.js"></script>
     <style>
         :root {
@@ -31,10 +31,12 @@
         .step-indicators { display: flex; gap: 40px; }
         .step-ind { font-size: 20px; color: #ddd; font-weight: bold; transition: 0.3s; }
         .step-ind.active { color: var(--primary); transform: scale(1.1); }
-        .stage { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; }
-        .instruction { font-size: 32px; color: #444; margin-bottom: 40px; font-weight: 600; }
+        
+        /* 舞台布局：字在上，释义在下 */
+        .stage { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; gap: 40px; }
+        .instruction { font-size: 28px; color: #888; font-weight: 500; margin-top: 20px; }
 
-        /* 数据管理区样式 */
+        /* 数据管理区 */
         .data-management { margin-top: 60px; padding-top: 30px; border-top: 2px dashed #e0e0e0; text-align: center; color: #666; }
         .data-btn { background: transparent; border: 1px solid #ccc; padding: 8px 20px; border-radius: 20px; cursor: pointer; margin: 0 10px; font-size: 14px; color: #555; transition: all 0.2s; }
         .data-btn:hover { border-color: var(--primary); color: var(--primary); background: white; }
@@ -67,6 +69,8 @@
         .ghost-input:not(:focus) + .visual-layer .cursor { display: none; }
         @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
         .rich-input-wrapper:focus-within { border-color: var(--primary); box-shadow: 0 0 0 6px rgba(123,97,255,0.2); }
+        
+        /* 绿色反馈 */
         .rich-input-wrapper.correct { 
             border-color: var(--success) !important; 
             background-color: var(--success-bg) !important; 
@@ -98,6 +102,7 @@
                 <div class="stat-card"><span class="stat-num" id="stat-mistakes" style="color:var(--danger)">0</span><br>错题本</div>
             </div>
             <div style="text-align:center; margin-bottom:20px;">
+                <!-- 修改默认值为 21 -->
                 <label>计划：<input type="number" id="plan-days" value="21" style="width:50px;text-align:center" onchange="App.saveConfig()"> 天</label>
                 &nbsp;&nbsp;
                 <select id="learn-order"><option value="random">随机乱序</option><option value="sequence">列表顺序</option></select>
@@ -108,7 +113,7 @@
                 <button class="menu-btn" style="border:2px solid #ddd; background:white;" onclick="App.switchView('import')">📂 导入新词</button>
             </div>
 
-            <!-- 数据管理区 -->
+            <!-- 数据管理 -->
             <div class="data-management">
                 <h4>🛠️ 数据管理与备份</h4>
                 <button class="data-btn" onclick="DataManager.exportData()">⬇️ 导出进度</button>
@@ -151,12 +156,11 @@
     </div>
 
     <script>
-        // 简易词典
         const DICT = {"apple":"苹果","banana":"香蕉","cat":"猫","dog":"狗","elephant":"大象","fish":"鱼","girl":"女孩","hello":"你好","ice":"冰","juice":"果汁","kite":"风筝","lion":"狮子","monkey":"猴子","nose":"鼻子","orange":"橙子","pig":"猪","queen":"女王","rabbit":"兔子","sun":"太阳","tiger":"老虎","umbrella":"雨伞","van":"货车","water":"水","box":"盒子","yellow":"黄色","zoo":"动物园","welcome":"欢迎","student":"学生","teacher":"老师","school":"学校","pizza":"披萨","hamburger":"汉堡","computer":"电脑","friend":"朋友"};
 
         const DB = {
-            key: 'phonics_pro_v17_full',
-            data: { lib: [], config: { planDays: 7 } },
+            key: 'phonics_pro_v17_21days',
+            data: { lib: [], config: { planDays: 21 } }, // 修改默认值为 21
             load() { const r = localStorage.getItem(this.key); if(r) this.data = JSON.parse(r); },
             save() { localStorage.setItem(this.key, JSON.stringify(this.data)); App.updateUI(); },
             add(list) {
@@ -173,9 +177,7 @@
             split(w) { return w.length<=4 ? [w] : (w.toLowerCase().match(/[^aeiouy]*[aeiouy]+(?:[^aeiouy]*$|[^aeiouy](?=[^aeiouy]))?/gi) || [w]); }
         };
 
-        // ==================== 数据管理 (备份/恢复/重置) ====================
         const DataManager = {
-            // 导出
             exportData() {
                 const dataStr = JSON.stringify(DB.data);
                 const blob = new Blob([dataStr], {type: "application/json"});
@@ -186,7 +188,6 @@
                 a.click();
                 URL.revokeObjectURL(url);
             },
-            // 导入
             importData(file) {
                 if(!file) return;
                 const reader = new FileReader();
@@ -197,23 +198,17 @@
                             DB.data = newData;
                             DB.save();
                             alert("✅ 进度恢复成功！");
-                        } else {
-                            alert("❌ 文件格式错误，非本程序备份文件。");
-                        }
-                    } catch(err) {
-                        alert("❌ 读取失败，文件可能损坏。");
-                    }
-                    document.getElementById('backup-input').value = ''; // 重置输入框
+                        } else { alert("❌ 文件格式错误"); }
+                    } catch(err) { alert("❌ 读取失败"); }
+                    document.getElementById('backup-input').value = '';
                 };
                 reader.readAsText(file);
             },
-            // 重置
             resetData() {
-                const confirmMsg = "⚠️ 严重警告：\n\n即将清空所有学习记录和单词库！此操作不可撤销。\n\n建议先点击【⬇️ 导出进度】进行备份。\n\n确定要重置吗？";
-                if(confirm(confirmMsg)) {
+                if(confirm("⚠️ 警告：即清空所有数据！建议先【导出进度】。\n\n确定要重置吗？")) {
                     if(confirm("再次确认：真的要清空吗？")) {
                         localStorage.removeItem(DB.key);
-                        location.reload(); // 刷新页面重置
+                        location.reload();
                     }
                 }
             }
