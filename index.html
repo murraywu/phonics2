@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>自然拼读 Pro - V16 布局重构版</title>
+    <title>倪珮萱的自然拼读 Pro - V17 全功能版</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.21/mammoth.browser.min.js"></script>
     <style>
         :root {
@@ -31,23 +31,24 @@
         .step-indicators { display: flex; gap: 40px; }
         .step-ind { font-size: 20px; color: #ddd; font-weight: bold; transition: 0.3s; }
         .step-ind.active { color: var(--primary); transform: scale(1.1); }
-        
-        /* === 舞台布局调整 === */
-        .stage { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; gap: 40px; }
-        
-        /* 释义下沉，字体灰色 */
-        .instruction { font-size: 28px; color: #888; font-weight: 500; margin-top: 20px; }
+        .stage { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; }
+        .instruction { font-size: 32px; color: #444; margin-bottom: 40px; font-weight: 600; }
 
-        /* ==================== 输入框加大 ==================== */
+        /* 数据管理区样式 */
+        .data-management { margin-top: 60px; padding-top: 30px; border-top: 2px dashed #e0e0e0; text-align: center; color: #666; }
+        .data-btn { background: transparent; border: 1px solid #ccc; padding: 8px 20px; border-radius: 20px; cursor: pointer; margin: 0 10px; font-size: 14px; color: #555; transition: all 0.2s; }
+        .data-btn:hover { border-color: var(--primary); color: var(--primary); background: white; }
+        .btn-reset { border-color: #ffccc7; color: var(--danger); }
+        .btn-reset:hover { background: var(--danger); color: white; border-color: var(--danger); }
+
+        /* 输入框与视觉层 */
         .rich-input-wrapper { 
             position: relative; display: inline-block; margin: 0 10px; 
             background: white; 
-            border-radius: 20px; border: 5px solid #ccc; /* 边框加粗 */
+            border-radius: 20px; border: 5px solid #ccc;
             box-shadow: 0 8px 20px rgba(0,0,0,0.08); cursor: text;
             transition: all 0.2s;
         }
-
-        /* 视觉层：字号加大 */
         .visual-layer { 
             font-family: var(--font-mono); font-size: 80px; font-weight: 800; 
             text-align: center; width: 100%; height: 100%; line-height: 160px; 
@@ -55,36 +56,29 @@
             pointer-events: none; white-space: pre;
             background: transparent !important; 
         }
-        
         .ghost-input { 
             position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; 
             opacity: 0 !important; cursor: text; padding: 0; margin: 0; border: none;
         }
-
         .cursor {
             display: inline-block; width: 4px; height: 80px; background-color: #333;
             vertical-align: middle; margin-bottom: 12px; animation: blink 1s step-end infinite;
         }
         .ghost-input:not(:focus) + .visual-layer .cursor { display: none; }
         @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
-
         .rich-input-wrapper:focus-within { border-color: var(--primary); box-shadow: 0 0 0 6px rgba(123,97,255,0.2); }
-        
         .rich-input-wrapper.correct { 
             border-color: var(--success) !important; 
             background-color: var(--success-bg) !important; 
             box-shadow: 0 0 30px rgba(82, 196, 26, 0.5) !important;
             transform: scale(1.05); 
         }
-        
         .rich-input-wrapper.correct .c { color: #0050b3; } 
         .rich-input-wrapper.correct .v { color: #cf1322; }
         .rich-input-wrapper.error { border-color: var(--danger); animation: shake 0.4s; }
-
         .v { color: #ff4d4f; font-weight: 900; } 
         .c { color: #1890ff; } 
         @keyframes shake { 0%,100%{transform:translateX(0);} 25%{transform:translateX(-10px);} 75%{transform:translateX(10px);} }
-
         .enter-tip { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); color: #aaa; font-size: 14px; opacity: 0; transition: 0.3s; }
         .enter-tip.show { opacity: 1; }
         .summary-card { background: white; padding: 40px; border-radius: 20px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
@@ -104,28 +98,37 @@
                 <div class="stat-card"><span class="stat-num" id="stat-mistakes" style="color:var(--danger)">0</span><br>错题本</div>
             </div>
             <div style="text-align:center; margin-bottom:20px;">
-                <label>计划：<input type="number" id="plan-days" value="7" style="width:50px;text-align:center" onchange="App.saveConfig()"> 天</label>
+                <label>计划：<input type="number" id="plan-days" value="21" style="width:50px;text-align:center" onchange="App.saveConfig()"> 天</label>
                 &nbsp;&nbsp;
                 <select id="learn-order"><option value="random">随机乱序</option><option value="sequence">列表顺序</option></select>
             </div>
             <div style="text-align:center;">
                 <button class="menu-btn btn-primary" onclick="App.start('daily')">🚀 开始练习 <span class="key-hint">Enter</span></button>
                 <button class="menu-btn" style="color:var(--danger); border:2px solid var(--danger); background:white;" onclick="App.start('review')">💊 复习错题</button>
-                <button class="menu-btn" style="border:2px solid #ddd; background:white;" onclick="App.switchView('import')">📂 导入</button>
+                <button class="menu-btn" style="border:2px solid #ddd; background:white;" onclick="App.switchView('import')">📂 导入新词</button>
+            </div>
+
+            <!-- 数据管理区 -->
+            <div class="data-management">
+                <h4>🛠️ 数据管理与备份</h4>
+                <button class="data-btn" onclick="DataManager.exportData()">⬇️ 导出进度</button>
+                <button class="data-btn" onclick="document.getElementById('backup-input').click()">⬆️ 导入进度</button>
+                <button class="data-btn btn-reset" onclick="DataManager.resetData()">⚠️ 重置所有数据</button>
+                <input type="file" id="backup-input" hidden accept=".json" onchange="DataManager.importData(this.files[0])">
             </div>
         </div>
     </div>
 
     <div id="view-import" class="view-section">
         <div class="dashboard-container">
-            <h2 style="text-align:center">导入单词</h2>
+            <h2 style="text-align:center">导入新单词</h2>
             <div class="drop-zone" onclick="document.getElementById('file-input').click()">
                 <div style="font-size:30px">📄</div>
                 <div>点击上传 Word / Txt</div>
                 <div id="file-name" style="color:var(--primary); margin-top:10px; font-weight:bold;"></div>
             </div>
             <input type="file" id="file-input" hidden accept=".docx,.txt" onchange="Importer.handleFile(this.files[0])">
-            <textarea id="manual-text" placeholder="格式: apple 苹果&#10;如果只输入 'apple'，系统将尝试自动翻译" style="width:100%; height:150px; margin:20px 0; padding:10px; font-family: monospace;"></textarea>
+            <textarea id="manual-text" placeholder="格式: apple 苹果" style="width:100%; height:150px; margin:20px 0; padding:10px; font-family: monospace;"></textarea>
             <div style="text-align:center;">
                 <button class="menu-btn btn-primary" onclick="Importer.parseManual()">确定</button>
                 <button class="menu-btn" onclick="App.switchView('dashboard')">返回</button>
@@ -148,19 +151,11 @@
     </div>
 
     <script>
-        // ==================== 简易词典 (用于无网/无API时的回退) ====================
-        const DICT = {
-            "apple": "苹果", "banana": "香蕉", "cat": "猫", "dog": "狗", "elephant": "大象",
-            "fish": "鱼", "girl": "女孩", "hello": "你好", "ice": "冰", "juice": "果汁",
-            "kite": "风筝", "lion": "狮子", "monkey": "猴子", "nose": "鼻子", "orange": "橙子",
-            "pig": "猪", "queen": "女王", "rabbit": "兔子", "sun": "太阳", "tiger": "老虎",
-            "umbrella": "雨伞", "van": "货车", "water": "水", "box": "盒子", "yellow": "黄色",
-            "zoo": "动物园", "welcome": "欢迎", "student": "学生", "teacher": "老师", "school": "学校",
-            "pizza": "披萨", "hamburger": "汉堡", "computer": "电脑", "friend": "朋友"
-        };
+        // 简易词典
+        const DICT = {"apple":"苹果","banana":"香蕉","cat":"猫","dog":"狗","elephant":"大象","fish":"鱼","girl":"女孩","hello":"你好","ice":"冰","juice":"果汁","kite":"风筝","lion":"狮子","monkey":"猴子","nose":"鼻子","orange":"橙子","pig":"猪","queen":"女王","rabbit":"兔子","sun":"太阳","tiger":"老虎","umbrella":"雨伞","van":"货车","water":"水","box":"盒子","yellow":"黄色","zoo":"动物园","welcome":"欢迎","student":"学生","teacher":"老师","school":"学校","pizza":"披萨","hamburger":"汉堡","computer":"电脑","friend":"朋友"};
 
         const DB = {
-            key: 'phonics_pro_v16_final',
+            key: 'phonics_pro_v17_full',
             data: { lib: [], config: { planDays: 7 } },
             load() { const r = localStorage.getItem(this.key); if(r) this.data = JSON.parse(r); },
             save() { localStorage.setItem(this.key, JSON.stringify(this.data)); App.updateUI(); },
@@ -168,11 +163,7 @@
                 let c = 0;
                 list.forEach(i => {
                     if(!this.data.lib.find(w=>w.word===i.word)) {
-                        // 自动翻译逻辑
-                        let trans = i.trans;
-                        if (!trans) {
-                            trans = DICT[i.word] || "暂无释义"; 
-                        }
+                        let trans = i.trans || DICT[i.word] || "暂无释义";
                         this.data.lib.push({ word: i.word, trans: trans, chunks: this.split(i.word), status: 0, err: 0 });
                         c++;
                     }
@@ -180,6 +171,52 @@
                 alert(`导入 ${c} 词`); this.save();
             },
             split(w) { return w.length<=4 ? [w] : (w.toLowerCase().match(/[^aeiouy]*[aeiouy]+(?:[^aeiouy]*$|[^aeiouy](?=[^aeiouy]))?/gi) || [w]); }
+        };
+
+        // ==================== 数据管理 (备份/恢复/重置) ====================
+        const DataManager = {
+            // 导出
+            exportData() {
+                const dataStr = JSON.stringify(DB.data);
+                const blob = new Blob([dataStr], {type: "application/json"});
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `phonics_backup_${new Date().toISOString().slice(0,10)}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+            },
+            // 导入
+            importData(file) {
+                if(!file) return;
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const newData = JSON.parse(e.target.result);
+                        if(newData.lib && Array.isArray(newData.lib)) {
+                            DB.data = newData;
+                            DB.save();
+                            alert("✅ 进度恢复成功！");
+                        } else {
+                            alert("❌ 文件格式错误，非本程序备份文件。");
+                        }
+                    } catch(err) {
+                        alert("❌ 读取失败，文件可能损坏。");
+                    }
+                    document.getElementById('backup-input').value = ''; // 重置输入框
+                };
+                reader.readAsText(file);
+            },
+            // 重置
+            resetData() {
+                const confirmMsg = "⚠️ 严重警告：\n\n即将清空所有学习记录和单词库！此操作不可撤销。\n\n建议先点击【⬇️ 导出进度】进行备份。\n\n确定要重置吗？";
+                if(confirm(confirmMsg)) {
+                    if(confirm("再次确认：真的要清空吗？")) {
+                        localStorage.removeItem(DB.key);
+                        location.reload(); // 刷新页面重置
+                    }
+                }
+            }
         };
 
         const Importer = {
@@ -194,7 +231,6 @@
             parse(txt) {
                 const list = [];
                 txt.split(/[\r\n]+/).forEach(l => {
-                    // 支持: "word translation" 或 "word"
                     const m = l.trim().match(/^([a-zA-Z\-\']+)(.*)/);
                     if(m) {
                         const word = m[1].toLowerCase();
@@ -208,10 +244,10 @@
 
         const Practice = {
             queue: [], idx: 0, step: 1, canNext: false, sessionErr: 0, mode: 'learning',
-            currentWordHasError: false, // 记录当前词是否出过错
+            currentWordHasError: false, 
 
             start(list, mode) {
-                this.queue = list; this.idx = 0; this.sessionErr = 0; this.mode = mode; // 'daily' or 'review'
+                this.queue = list; this.idx = 0; this.sessionErr = 0; this.mode = mode;
                 this.loadWord(0); document.addEventListener('keydown', this.handleKey);
             },
             stop() { document.removeEventListener('keydown', this.handleKey); App.switchView('dashboard'); },
@@ -233,10 +269,8 @@
                 stage.innerHTML = '';
                 [1,2,3].forEach(n => document.getElementById(`ind-${n}`).className = `step-ind ${n===this.step?'active':''}`);
 
-                // --- Step 1: 读 ---
                 if(this.step === 1) {
                     this.setCanNext(true);
-                    // 布局：单词在上，释义在下
                     const wordBox = document.createElement('div');
                     wordBox.style.display = 'flex'; wordBox.style.gap = '15px';
                     wordBox.innerHTML = data.chunks.map(c=>
@@ -245,22 +279,15 @@
                          </div>`
                     ).join('');
                     stage.appendChild(wordBox);
-                    
                     const transBox = document.createElement('div');
-                    transBox.className = 'instruction';
-                    transBox.innerText = data.trans || "暂无释义";
+                    transBox.className = 'instruction'; transBox.innerText = data.trans || "暂无释义";
                     stage.appendChild(transBox);
-
                     setTimeout(() => this.speak(data.word), 100);
                 }
-
-                // --- Step 2: 分段拼 ---
                 else if(this.step === 2) {
                     this.setCanNext(false);
-                    // 容器
                     const container = document.createElement('div');
                     container.style.display='flex'; container.style.alignItems='center';
-                    
                     data.chunks.forEach((chunk, k) => {
                         if(k>0) {
                             const sep = document.createElement('div'); sep.innerHTML = '-'; 
@@ -269,7 +296,6 @@
                         }
                         const {wrapper, input} = this.createGhostInput(chunk.length, `seg-${k}`);
                         input.disabled = (k!==0);
-                        
                         input.addEventListener('input', () => {
                             if(input.value.toLowerCase() === chunk) {
                                 wrapper.classList.add('correct'); input.disabled=true;
@@ -282,57 +308,38 @@
                         container.appendChild(wrapper);
                     });
                     stage.appendChild(container);
-
-                    // 释义在下
-                    const label = document.createElement('div');
-                    label.className = 'instruction'; label.innerText = "分段拼写";
-                    stage.appendChild(label);
-
+                    const label = document.createElement('div'); label.className = 'instruction'; label.innerText = "分段拼写"; stage.appendChild(label);
                     setTimeout(() => { const f = document.getElementById('seg-0'); if(f) f.focus(); this.speak(data.chunks[0]); }, 100);
                 }
-
-                // --- Step 3: 完整写 ---
                 else if(this.step === 3) {
                     this.setCanNext(false);
-                    
                     const {wrapper, input} = this.createGhostInput(data.word.length, 'full');
-                    wrapper.style.width = '700px'; // 更宽的大框
-                    
+                    wrapper.style.width = '700px'; 
                     input.addEventListener('keydown', e => {
                         if(e.key === 'Enter') {
                             e.stopPropagation();
                             if(this.canNext) { Practice.next(); return; }
                             if(input.value.toLowerCase() === data.word) {
-                                wrapper.classList.add('correct'); 
-                                input.disabled=true;
-                                this.saveResult(data); // 保存结果
+                                wrapper.classList.add('correct'); input.disabled=true;
+                                this.saveResult(data); 
                                 this.speak('Excellent');
                                 this.setCanNext(true);
-                            } else {
-                                this.triggerError(wrapper);
-                            }
+                            } else { this.triggerError(wrapper); }
                         }
                     });
                     stage.appendChild(wrapper);
-
-                    // 释义在下
-                    const label = document.createElement('div');
-                    label.className = 'instruction'; label.innerText = "听音默写";
-                    stage.appendChild(label);
-
+                    const label = document.createElement('div'); label.className = 'instruction'; label.innerText = "听音默写"; stage.appendChild(label);
                     setTimeout(() => { input.focus(); this.speak(data.word); }, 100);
                 }
             },
 
             createGhostInput(len, id) {
                 const w = document.createElement('div'); w.className = 'rich-input-wrapper';
-                w.style.width = Math.max(140, len * 70) + 'px'; w.style.height = '160px'; // 尺寸加大
-                
+                w.style.width = Math.max(140, len * 70) + 'px'; w.style.height = '160px';
                 const inp = document.createElement('input'); inp.className = 'ghost-input';
                 inp.maxLength = len; inp.id = id; inp.autocomplete = "off";
                 const vis = document.createElement('div'); vis.className = 'visual-layer';
                 vis.innerHTML = `<span class="cursor"></span>`;
-                
                 inp.addEventListener('input', () => {
                     let html = this.color(inp.value);
                     if (inp.value.length < len) html += `<span class="cursor"></span>`;
@@ -344,32 +351,20 @@
 
             triggerError(wrapper) {
                 wrapper.classList.add('error'); this.speak('Try again');
-                
-                // 1. 标记当前词在本轮出错了
-                this.currentWordHasError = true;
-                
-                // 2. 立即增加数据库的错误计数 (确保进入错题本)
+                this.currentWordHasError = true; 
                 const dbItem = DB.data.lib.find(w => w.word === this.queue[this.idx].word);
-                if(dbItem) dbItem.err++;
+                if(dbItem) dbItem.err++; 
                 DB.save();
-
                 setTimeout(() => { this.step = 1; this.render(); }, 1000);
             },
 
-            // 专门处理“正确”时的逻辑
             saveResult(data) {
                 const dbItem = DB.data.lib.find(w => w.word === data.word);
                 if(!dbItem) return;
-
-                // 逻辑：只有在“复习模式”且“本轮一次没错过”，才能消除错题
-                if (this.mode === 'review') {
-                    if (!this.currentWordHasError) {
-                        if(dbItem.err > 0) dbItem.err--;
-                    }
+                if (this.mode === 'review' && !this.currentWordHasError) {
+                    if(dbItem.err > 0) dbItem.err--;
                 }
-                
-                // 无论什么模式，只要最后拼对了，就标记为已学 (status=1)
-                dbItem.status = 1;
+                dbItem.status = 1; 
                 DB.save();
             },
 
@@ -419,8 +414,7 @@
                     list = l.filter(w=>w.err>0);
                     if(!list.length) return alert("没有错题");
                 }
-                App.switchView('practice'); 
-                Practice.start(list, mode); // 传入 mode
+                App.switchView('practice'); Practice.start(list, mode);
             },
             endSession() { if(confirm("退出?")) { Practice.stop(); App.switchView('dashboard'); } }
         };
