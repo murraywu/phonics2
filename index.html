@@ -159,7 +159,7 @@
         const DICT = {"apple":"苹果","banana":"香蕉","cat":"猫","dog":"狗","elephant":"大象","fish":"鱼","girl":"女孩","hello":"你好","ice":"冰","juice":"果汁","kite":"风筝","lion":"狮子","monkey":"猴子","nose":"鼻子","orange":"橙子","pig":"猪","queen":"女王","rabbit":"兔子","sun":"太阳","tiger":"老虎","umbrella":"雨伞","van":"货车","water":"水","box":"盒子","yellow":"黄色","zoo":"动物园","welcome":"欢迎","student":"学生","teacher":"老师","school":"学校","pizza":"披萨","hamburger":"汉堡","computer":"电脑","friend":"朋友"};
 
         const DB = {
-            key: 'phonics_pro_v17_21days',
+            key: 'phonics_pro_v17_npx',
             data: { lib: [], config: { planDays: 21 } }, // 修改默认值为 21
             load() { const r = localStorage.getItem(this.key); if(r) this.data = JSON.parse(r); },
             save() { localStorage.setItem(this.key, JSON.stringify(this.data)); App.updateUI(); },
