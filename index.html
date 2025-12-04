@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>自然拼读 Pro - V16 布局重构版</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.21/mammoth.browser.min.js"></script>
+    <style>
+        :root {
+            --primary: #7b61ff;
+            --success: #52c41a;
+            --success-bg: #d9f7be;
+            --danger: #ff4d4f;
+            --bg: #f5f7fa;
+            --font-mono: "Consolas", "Monaco", "Courier New", monospace; 
+        }
+
+        body { font-family: 'Segoe UI', sans-serif; background-color: var(--bg); margin: 0; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+        .view-section { display: none; height: 100%; width: 100%; flex-direction: column; }
+        .view-section.active { display: flex; }
+        .dashboard-container { padding: 40px; max-width: 1000px; margin: 0 auto; width: 100%; overflow-y: auto; }
+        
+        .key-hint { display: inline-block; padding: 2px 8px; border: 1px solid #ccc; border-radius: 5px; font-size: 12px; color: #999; margin-left: 5px; background: #fff; }
+        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin: 30px 0; }
+        .stat-card { background: white; padding: 25px; border-radius: 15px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        .stat-num { font-size: 36px; font-weight: 800; color: var(--primary); }
+        .menu-btn { font-size: 18px; padding: 15px 40px; border-radius: 50px; border: none; cursor: pointer; font-weight: bold; margin: 0 10px; transition: transform 0.2s; position: relative; }
+        .menu-btn:hover { transform: translateY(-3px); }
+        .btn-primary { background: var(--primary); color: white; }
+        .header { background: white; padding: 15px 40px; display: flex; justify-content: space-between; align-items: center; height: 60px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .step-indicators { display: flex; gap: 40px; }
+        .step-ind { font-size: 20px; color: #ddd; font-weight: bold; transition: 0.3s; }
+        .step-ind.active { color: var(--primary); transform: scale(1.1); }
+        
+        /* === 舞台布局调整 === */
+        .stage { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; gap: 40px; }
+        
+        /* 释义下沉，字体灰色 */
+        .instruction { font-size: 28px; color: #888; font-weight: 500; margin-top: 20px; }
+
+        /* ==================== 输入框加大 ==================== */
+        .rich-input-wrapper { 
+            position: relative; display: inline-block; margin: 0 10px; 
+            background: white; 
+            border-radius: 20px; border: 5px solid #ccc; /* 边框加粗 */
+            box-shadow: 0 8px 20px rgba(0,0,0,0.08); cursor: text;
+            transition: all 0.2s;
+        }
+
+        /* 视觉层：字号加大 */
+        .visual-layer { 
+            font-family: var(--font-mono); font-size: 80px; font-weight: 800; 
+            text-align: center; width: 100%; height: 100%; line-height: 160px; 
+            position: absolute; top: 0; left: 0; z-index: 1;
+            pointer-events: none; white-space: pre;
+            background: transparent !important; 
+        }
+        
+        .ghost-input { 
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; 
+            opacity: 0 !important; cursor: text; padding: 0; margin: 0; border: none;
+        }
+
+        .cursor {
+            display: inline-block; width: 4px; height: 80px; background-color: #333;
+            vertical-align: middle; margin-bottom: 12px; animation: blink 1s step-end infinite;
+        }
+        .ghost-input:not(:focus) + .visual-layer .cursor { display: none; }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+        .rich-input-wrapper:focus-within { border-color: var(--primary); box-shadow: 0 0 0 6px rgba(123,97,255,0.2); }
+        
+        .rich-input-wrapper.correct { 
+            border-color: var(--success) !important; 
+            background-color: var(--success-bg) !important; 
+            box-shadow: 0 0 30px rgba(82, 196, 26, 0.5) !important;
+            transform: scale(1.05); 
+        }
+        
+        .rich-input-wrapper.correct .c { color: #0050b3; } 
+        .rich-input-wrapper.correct .v { color: #cf1322; }
+        .rich-input-wrapper.error { border-color: var(--danger); animation: shake 0.4s; }
+
+        .v { color: #ff4d4f; font-weight: 900; } 
+        .c { color: #1890ff; } 
+        @keyframes shake { 0%,100%{transform:translateX(0);} 25%{transform:translateX(-10px);} 75%{transform:translateX(10px);} }
+
+        .enter-tip { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); color: #aaa; font-size: 14px; opacity: 0; transition: 0.3s; }
+        .enter-tip.show { opacity: 1; }
+        .summary-card { background: white; padding: 40px; border-radius: 20px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+        .drop-zone { border: 3px dashed #ccc; padding: 40px; background: white; margin: 20px auto; max-width: 600px; cursor: pointer; text-align: center; }
+    </style>
+</head>
+<body>
+
+    <div id="view-dashboard" class="view-section active">
+        <div class="dashboard-container">
+            <h1 style="text-align:center; color:#333;">📚 自然拼读 Pro</h1>
+            <p style="text-align:center; color:#666;">今日待学：<b id="daily-target" style="color:var(--primary)">0</b> 词</p>
+            <div class="stats-grid">
+                <div class="stat-card"><span class="stat-num" id="stat-total">0</span><br>总词库</div>
+                <div class="stat-card"><span class="stat-num" id="stat-learned" style="color:var(--success)">0</span><br>已掌握</div>
+                <div class="stat-card"><span class="stat-num" id="stat-remain" style="color:#faad14">0</span><br>未学习</div>
+                <div class="stat-card"><span class="stat-num" id="stat-mistakes" style="color:var(--danger)">0</span><br>错题本</div>
+            </div>
+            <div style="text-align:center; margin-bottom:20px;">
+                <label>计划：<input type="number" id="plan-days" value="7" style="width:50px;text-align:center" onchange="App.saveConfig()"> 天</label>
+                &nbsp;&nbsp;
+                <select id="learn-order"><option value="random">随机乱序</option><option value="sequence">列表顺序</option></select>
+            </div>
+            <div style="text-align:center;">
+                <button class="menu-btn btn-primary" onclick="App.start('daily')">🚀 开始练习 <span class="key-hint">Enter</span></button>
+                <button class="menu-btn" style="color:var(--danger); border:2px solid var(--danger); background:white;" onclick="App.start('review')">💊 复习错题</button>
+                <button class="menu-btn" style="border:2px solid #ddd; background:white;" onclick="App.switchView('import')">📂 导入</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="view-import" class="view-section">
+        <div class="dashboard-container">
+            <h2 style="text-align:center">导入单词</h2>
+            <div class="drop-zone" onclick="document.getElementById('file-input').click()">
+                <div style="font-size:30px">📄</div>
+                <div>点击上传 Word / Txt</div>
+                <div id="file-name" style="color:var(--primary); margin-top:10px; font-weight:bold;"></div>
+            </div>
+            <input type="file" id="file-input" hidden accept=".docx,.txt" onchange="Importer.handleFile(this.files[0])">
+            <textarea id="manual-text" placeholder="格式: apple 苹果&#10;如果只输入 'apple'，系统将尝试自动翻译" style="width:100%; height:150px; margin:20px 0; padding:10px; font-family: monospace;"></textarea>
+            <div style="text-align:center;">
+                <button class="menu-btn btn-primary" onclick="Importer.parseManual()">确定</button>
+                <button class="menu-btn" onclick="App.switchView('dashboard')">返回</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="view-practice" class="view-section">
+        <div class="header">
+            <button onclick="App.endSession()" style="padding:5px 15px; cursor:pointer;">Esc 退出</button>
+            <div class="step-indicators">
+                <div id="ind-1" class="step-ind">1. 读</div>
+                <div id="ind-2" class="step-ind">2. 分</div>
+                <div id="ind-3" class="step-ind">3. 写</div>
+            </div>
+            <div>剩余: <b id="remain-count">0</b></div>
+        </div>
+        <div class="stage" id="stage"></div>
+        <div id="enter-tip" class="enter-tip">按 Enter 下一步</div>
+    </div>
+
+    <script>
+        // ==================== 简易词典 (用于无网/无API时的回退) ====================
+        const DICT = {
+            "apple": "苹果", "banana": "香蕉", "cat": "猫", "dog": "狗", "elephant": "大象",
+            "fish": "鱼", "girl": "女孩", "hello": "你好", "ice": "冰", "juice": "果汁",
+            "kite": "风筝", "lion": "狮子", "monkey": "猴子", "nose": "鼻子", "orange": "橙子",
+            "pig": "猪", "queen": "女王", "rabbit": "兔子", "sun": "太阳", "tiger": "老虎",
+            "umbrella": "雨伞", "van": "货车", "water": "水", "box": "盒子", "yellow": "黄色",
+            "zoo": "动物园", "welcome": "欢迎", "student": "学生", "teacher": "老师", "school": "学校",
+            "pizza": "披萨", "hamburger": "汉堡", "computer": "电脑", "friend": "朋友"
+        };
+
+        const DB = {
+            key: 'phonics_pro_v16_final',
+            data: { lib: [], config: { planDays: 7 } },
+            load() { const r = localStorage.getItem(this.key); if(r) this.data = JSON.parse(r); },
+            save() { localStorage.setItem(this.key, JSON.stringify(this.data)); App.updateUI(); },
+            add(list) {
+                let c = 0;
+                list.forEach(i => {
+                    if(!this.data.lib.find(w=>w.word===i.word)) {
+                        // 自动翻译逻辑
+                        let trans = i.trans;
+                        if (!trans) {
+                            trans = DICT[i.word] || "暂无释义"; 
+                        }
+                        this.data.lib.push({ word: i.word, trans: trans, chunks: this.split(i.word), status: 0, err: 0 });
+                        c++;
+                    }
+                });
+                alert(`导入 ${c} 词`); this.save();
+            },
+            split(w) { return w.length<=4 ? [w] : (w.toLowerCase().match(/[^aeiouy]*[aeiouy]+(?:[^aeiouy]*$|[^aeiouy](?=[^aeiouy]))?/gi) || [w]); }
+        };
+
+        const Importer = {
+            handleFile(f) {
+                if(!f) return; document.getElementById('file-name').innerText = f.name;
+                const r = new FileReader();
+                if(f.name.endsWith('.docx')) r.onload = e => mammoth.extractRawText({arrayBuffer:e.target.result}).then(x=>this.parse(x.value));
+                else r.onload = e => this.parse(e.target.result);
+                f.name.endsWith('.docx') ? r.readAsArrayBuffer(f) : r.readAsText(f);
+            },
+            parseManual() { this.parse(document.getElementById('manual-text').value); },
+            parse(txt) {
+                const list = [];
+                txt.split(/[\r\n]+/).forEach(l => {
+                    // 支持: "word translation" 或 "word"
+                    const m = l.trim().match(/^([a-zA-Z\-\']+)(.*)/);
+                    if(m) {
+                        const word = m[1].toLowerCase();
+                        const trans = m[2].replace(/^[\s,\.\-，]+/, '').trim();
+                        list.push({ word: word, trans: trans });
+                    }
+                });
+                if(list.length) { DB.add(list); App.switchView('dashboard'); } else alert("无有效单词");
+            }
+        };
+
+        const Practice = {
+            queue: [], idx: 0, step: 1, canNext: false, sessionErr: 0, mode: 'learning',
+            currentWordHasError: false, // 记录当前词是否出过错
+
+            start(list, mode) {
+                this.queue = list; this.idx = 0; this.sessionErr = 0; this.mode = mode; // 'daily' or 'review'
+                this.loadWord(0); document.addEventListener('keydown', this.handleKey);
+            },
+            stop() { document.removeEventListener('keydown', this.handleKey); App.switchView('dashboard'); },
+            handleKey(e) {
+                if(e.key === 'Escape') { App.endSession(); return; }
+                if(Practice.mode === 'summary' && e.key === 'Enter') { Practice.stop(); return; }
+                if(Practice.mode !== 'summary' && e.key === 'Enter') { if(Practice.canNext) Practice.next(); }
+            },
+            loadWord(i) {
+                this.idx = i; this.step = 1; this.canNext = false; this.currentWordHasError = false;
+                document.getElementById('remain-count').innerText = this.queue.length - i;
+                this.render();
+            },
+            setCanNext(b) { this.canNext = b; document.getElementById('enter-tip').classList.toggle('show', b); },
+
+            render() {
+                const data = this.queue[this.idx];
+                const stage = document.getElementById('stage');
+                stage.innerHTML = '';
+                [1,2,3].forEach(n => document.getElementById(`ind-${n}`).className = `step-ind ${n===this.step?'active':''}`);
+
+                // --- Step 1: 读 ---
+                if(this.step === 1) {
+                    this.setCanNext(true);
+                    // 布局：单词在上，释义在下
+                    const wordBox = document.createElement('div');
+                    wordBox.style.display = 'flex'; wordBox.style.gap = '15px';
+                    wordBox.innerHTML = data.chunks.map(c=>
+                        `<div class="rich-input-wrapper" style="width:${Math.max(120, c.length*70)}px; height:160px; border-color:var(--primary);">
+                            <div class="visual-layer" style="line-height:160px;">${this.color(c)}</div>
+                         </div>`
+                    ).join('');
+                    stage.appendChild(wordBox);
+                    
+                    const transBox = document.createElement('div');
+                    transBox.className = 'instruction';
+                    transBox.innerText = data.trans || "暂无释义";
+                    stage.appendChild(transBox);
+
+                    setTimeout(() => this.speak(data.word), 100);
+                }
+
+                // --- Step 2: 分段拼 ---
+                else if(this.step === 2) {
+                    this.setCanNext(false);
+                    // 容器
+                    const container = document.createElement('div');
+                    container.style.display='flex'; container.style.alignItems='center';
+                    
+                    data.chunks.forEach((chunk, k) => {
+                        if(k>0) {
+                            const sep = document.createElement('div'); sep.innerHTML = '-'; 
+                            sep.style.fontSize='40px'; sep.style.color='#ccc'; sep.style.margin='0 10px';
+                            container.appendChild(sep);
+                        }
+                        const {wrapper, input} = this.createGhostInput(chunk.length, `seg-${k}`);
+                        input.disabled = (k!==0);
+                        
+                        input.addEventListener('input', () => {
+                            if(input.value.toLowerCase() === chunk) {
+                                wrapper.classList.add('correct'); input.disabled=true;
+                                const next = document.getElementById(`seg-${k+1}`);
+                                if(next) { next.disabled=false; next.focus(); this.speak(data.chunks[k+1]); }
+                                else { this.setCanNext(true); this.speak('Good'); }
+                            } else if(input.value.length >= chunk.length) { this.triggerError(wrapper); }
+                        });
+                        input.addEventListener('keydown', e => { if(e.key==='Enter') e.preventDefault(); });
+                        container.appendChild(wrapper);
+                    });
+                    stage.appendChild(container);
+
+                    // 释义在下
+                    const label = document.createElement('div');
+                    label.className = 'instruction'; label.innerText = "分段拼写";
+                    stage.appendChild(label);
+
+                    setTimeout(() => { const f = document.getElementById('seg-0'); if(f) f.focus(); this.speak(data.chunks[0]); }, 100);
+                }
+
+                // --- Step 3: 完整写 ---
+                else if(this.step === 3) {
+                    this.setCanNext(false);
+                    
+                    const {wrapper, input} = this.createGhostInput(data.word.length, 'full');
+                    wrapper.style.width = '700px'; // 更宽的大框
+                    
+                    input.addEventListener('keydown', e => {
+                        if(e.key === 'Enter') {
+                            e.stopPropagation();
+                            if(this.canNext) { Practice.next(); return; }
+                            if(input.value.toLowerCase() === data.word) {
+                                wrapper.classList.add('correct'); 
+                                input.disabled=true;
+                                this.saveResult(data); // 保存结果
+                                this.speak('Excellent');
+                                this.setCanNext(true);
+                            } else {
+                                this.triggerError(wrapper);
+                            }
+                        }
+                    });
+                    stage.appendChild(wrapper);
+
+                    // 释义在下
+                    const label = document.createElement('div');
+                    label.className = 'instruction'; label.innerText = "听音默写";
+                    stage.appendChild(label);
+
+                    setTimeout(() => { input.focus(); this.speak(data.word); }, 100);
+                }
+            },
+
+            createGhostInput(len, id) {
+                const w = document.createElement('div'); w.className = 'rich-input-wrapper';
+                w.style.width = Math.max(140, len * 70) + 'px'; w.style.height = '160px'; // 尺寸加大
+                
+                const inp = document.createElement('input'); inp.className = 'ghost-input';
+                inp.maxLength = len; inp.id = id; inp.autocomplete = "off";
+                const vis = document.createElement('div'); vis.className = 'visual-layer';
+                vis.innerHTML = `<span class="cursor"></span>`;
+                
+                inp.addEventListener('input', () => {
+                    let html = this.color(inp.value);
+                    if (inp.value.length < len) html += `<span class="cursor"></span>`;
+                    vis.innerHTML = html;
+                });
+                w.append(inp, vis);
+                return {wrapper:w, input:inp};
+            },
+
+            triggerError(wrapper) {
+                wrapper.classList.add('error'); this.speak('Try again');
+                
+                // 1. 标记当前词在本轮出错了
+                this.currentWordHasError = true;
+                
+                // 2. 立即增加数据库的错误计数 (确保进入错题本)
+                const dbItem = DB.data.lib.find(w => w.word === this.queue[this.idx].word);
+                if(dbItem) dbItem.err++;
+                DB.save();
+
+                setTimeout(() => { this.step = 1; this.render(); }, 1000);
+            },
+
+            // 专门处理“正确”时的逻辑
+            saveResult(data) {
+                const dbItem = DB.data.lib.find(w => w.word === data.word);
+                if(!dbItem) return;
+
+                // 逻辑：只有在“复习模式”且“本轮一次没错过”，才能消除错题
+                if (this.mode === 'review') {
+                    if (!this.currentWordHasError) {
+                        if(dbItem.err > 0) dbItem.err--;
+                    }
+                }
+                
+                // 无论什么模式，只要最后拼对了，就标记为已学 (status=1)
+                dbItem.status = 1;
+                DB.save();
+            },
+
+            next() {
+                if(this.step < 3) { this.step++; this.render(); }
+                else { if(this.idx < this.queue.length-1) this.loadWord(this.idx+1); else this.showSummary(); }
+            },
+            showSummary() {
+                this.mode = 'summary';
+                document.getElementById('stage').innerHTML = `<div class="summary-card"><h1>🎉 完成</h1><p style="color:#999">按 Enter 返回</p></div>`;
+                this.setCanNext(false);
+            },
+            color(t) { return t ? t.split('').map(c=>`<span class="${/[aeiouy]/i.test(c)?'v':'c'}">${c}</span>`).join('') : ''; },
+            speak(t) { window.speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(t); u.lang='en-US'; u.rate=1.0; window.speechSynthesis.speak(u); }
+        };
+
+        const App = {
+            init() { 
+                DB.load(); this.updateUI(); 
+                document.addEventListener('keydown', (e) => {
+                    if(document.getElementById('view-dashboard').classList.contains('active') && e.key === 'Enter') { App.start('daily'); }
+                });
+            },
+            switchView(id) { document.querySelectorAll('.view-section').forEach(e=>e.classList.remove('active')); document.getElementById('view-'+id).classList.add('active'); this.updateUI(); },
+            updateUI() {
+                const l = DB.data.lib;
+                document.getElementById('stat-total').innerText = l.length;
+                document.getElementById('stat-learned').innerText = l.filter(w=>w.status==1).length;
+                document.getElementById('stat-remain').innerText = l.filter(w=>w.status==0).length;
+                document.getElementById('stat-mistakes').innerText = l.filter(w=>w.err>0).length;
+                document.getElementById('daily-target').innerText = Math.ceil(l.filter(w=>w.status==0).length / DB.data.config.planDays) || 0;
+            },
+            saveConfig() { DB.data.config.planDays = document.getElementById('plan-days').value; DB.save(); },
+            start(mode) {
+                const l = DB.data.lib;
+                let list = [];
+                if(mode==='daily') {
+                    let pool = l.filter(w=>w.status==0);
+                    if(pool.length === 0) {
+                        if(confirm("新词已学完！是否复习已学单词？")) pool = l.filter(w=>w.status==1);
+                        else return;
+                    }
+                    const c = parseInt(document.getElementById('daily-target').innerText) || 10;
+                    const rnd = document.getElementById('learn-order').value==='random';
+                    list = rnd ? pool.sort(()=>0.5-Math.random()).slice(0,c) : pool.slice(0,c);
+                } else {
+                    list = l.filter(w=>w.err>0);
+                    if(!list.length) return alert("没有错题");
+                }
+                App.switchView('practice'); 
+                Practice.start(list, mode); // 传入 mode
+            },
+            endSession() { if(confirm("退出?")) { Practice.stop(); App.switchView('dashboard'); } }
+        };
+        App.init();
+    </script>
+</body>
+</html>
