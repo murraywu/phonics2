@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>单词拼写 Pro - V32 真人语音版</title>
+    <title>单词拼写 Pro - V33</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.21/mammoth.browser.min.js"></script>
     <style>
         :root {
@@ -43,13 +43,8 @@
         .step-ind { font-size: 20px; color: #ddd; font-weight: bold; transition: 0.3s; }
         .step-ind.active { color: var(--primary); transform: scale(1.1); }
         
-        /* 舞台布局：垂直居中，元素间距 */
         .stage { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; gap: 20px; }
-        
-        /* 标题样式 */
         .stage-title { font-size: 32px; color: #333; font-weight: bold; margin-bottom: 20px; }
-        
-        /* 中文释义样式 (加大) */
         .translation-text { font-size: 42px; color: #555; font-weight: bold; margin-top: 30px; letter-spacing: 2px; }
 
         /* 声音设置面板 */
@@ -57,6 +52,12 @@
         .sound-col { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
         .sound-label { font-size: 14px; font-weight: bold; color: #555; }
         .sound-select { padding: 8px; border-radius: 8px; border: 1px solid #ccc; width: 250px; font-family: var(--font-main); font-size: 14px; }
+
+        /* 换肤控件 (修复补回) */
+        .theme-selector { display: flex; gap: 15px; justify-content: center; margin-bottom: 20px; background: rgba(255,255,255,0.6); padding: 10px; border-radius: 30px; width: fit-content; margin-left: auto; margin-right: auto; }
+        .color-dot { width: 30px; height: 30px; border-radius: 50%; cursor: pointer; border: 3px solid transparent; transition: transform 0.2s; }
+        .color-dot:hover { transform: scale(1.2); }
+        .color-dot.active { border-color: #333; transform: scale(1.1); box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
 
         /* 输入框 */
         .rich-input-wrapper { 
@@ -85,14 +86,12 @@
         @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
         .rich-input-wrapper:focus-within { border-color: var(--primary); box-shadow: 0 0 0 6px rgba(123,97,255,0.2); }
         
-        /* 绿色反馈 */
         .rich-input-wrapper.correct { 
             border-color: var(--success) !important; 
             background-color: var(--success-bg) !important; 
             box-shadow: 0 0 30px rgba(82, 196, 26, 0.5) !important;
             transform: scale(1.05); 
         }
-        
         .char-normal { color: #333; }
         .c { color: #0050b3; } 
         .v { color: #cf1322; }
@@ -115,9 +114,19 @@
 
     <div id="view-dashboard" class="view-section active">
         <div class="dashboard-container">
-            <h1 style="text-align:center; color:#333;">📚 倪珮萱单词拼写 Pro</h1>
+            <h1 style="text-align:center; color:#333;">📚 倪珮萱的单词拼写 Pro</h1>
             <p style="text-align:center; color:#666;">今日待学：<b id="daily-target" style="color:var(--primary)">0</b> 词</p>
             
+            <!-- 🎨 换肤控件 -->
+            <div class="theme-selector">
+                <div class="color-dot active" style="background:#f5f7fa" onclick="App.setTheme('#f5f7fa', this)" title="护眼蓝"></div>
+                <div class="color-dot" style="background:#f3e8ff" onclick="App.setTheme('#f3e8ff', this)" title="淡雅紫"></div>
+                <div class="color-dot" style="background:#fff0f6" onclick="App.setTheme('#fff0f6', this)" title="樱花粉"></div>
+                <div class="color-dot" style="background:#e6fffb" onclick="App.setTheme('#e6fffb', this)" title="薄荷绿"></div>
+                <div class="color-dot" style="background:#fff7e6" onclick="App.setTheme('#fff7e6', this)" title="暖米色"></div>
+            </div>
+
+            <!-- 🔊 声音设置 -->
             <div class="sound-settings">
                 <div class="sound-col">
                     <span class="sound-label">🗣️ 读单词</span>
@@ -290,13 +299,14 @@
 
         // ================== 数据库 ==================
         const DB = {
-            key: 'phonics_pro_v32_npx',
-            data: { lib: [], config: { planDays: 21, voiceCfg: null } },
+            key: 'phonics_pro_v33_npx',
+            data: { lib: [], config: { planDays: 21, bgColor: '#f5f7fa', voiceCfg: null } },
             load() { 
                 const r = localStorage.getItem(this.key); 
                 if(r) {
                     this.data = JSON.parse(r);
                     if(!this.data.config.voiceCfg) this.data.config.voiceCfg = { word: null, prompt: null };
+                    if(!this.data.config.bgColor) this.data.config.bgColor = '#f5f7fa';
                 }
             },
             save() { localStorage.setItem(this.key, JSON.stringify(this.data)); App.updateUI(); },
@@ -312,7 +322,7 @@
             }
         };
 
-        // ================== 解析器 (去除拆分逻辑) ==================
+        // ================== 解析器 ==================
         const Importer = {
             handleFile(f) {
                 if(!f) return; document.getElementById('file-name').innerText = f.name;
@@ -329,7 +339,6 @@
                     line = line.trim();
                     if(!line) return;
                     
-                    // 核心：智能分词（第一个汉字为界）
                     const chineseCharMatch = line.match(/[\u4e00-\u9fa5]/);
                     let wordPart = "", transPart = "";
 
@@ -342,7 +351,6 @@
                         transPart = "暂无释义";
                     }
 
-                    // 清理 / 符号，只保留纯单词
                     const cleanWord = wordPart.replace(/\//g, '').toLowerCase();
 
                     if(/[a-z]/.test(cleanWord)) {
@@ -354,7 +362,7 @@
             }
         };
 
-        // ================== 练习逻辑 (V32 双重拼写 + 全程释义) ==================
+        // ================== 练习逻辑 ==================
         const Practice = {
             queue: [], idx: 0, step: 1, canNext: false, mode: 'learning', currentWordHasError: false,
             start(list, mode) {
@@ -383,7 +391,7 @@
                 stage.innerHTML = '';
                 [1,2,3].forEach(n => document.getElementById(`ind-${n}`).className = `step-ind ${n===this.step?'active':''}`);
 
-                // Step 1: 认读 (显示颜色 + 释义)
+                // Step 1: 认读
                 if(this.step === 1) {
                     this.setCanNext(true);
                     
@@ -405,7 +413,7 @@
                     setTimeout(() => SpeechEngine.speak(data.word), 100);
                 }
                 
-                // Step 2: 看词拼写 (色彩辅助 + 释义)
+                // Step 2: 看词拼写
                 else if(this.step === 2) {
                     this.setCanNext(false);
                     
@@ -437,7 +445,7 @@
                     setTimeout(() => { input.focus(); SpeechEngine.speak(data.word); }, 100);
                 }
 
-                // Step 3: 听音默写 (全黑 + 释义)
+                // Step 3: 听音默写
                 else if(this.step === 3) {
                     this.setCanNext(false);
                     
@@ -555,12 +563,22 @@
 
         const App = {
             init() { 
-                DB.load(); App.updateUI(); 
+                DB.load(); 
+                this.applyTheme(DB.data.config.bgColor || '#f5f7fa');
+                this.updateUI(); 
                 SpeechEngine.init(DB.data.config.voiceCfg);
                 document.addEventListener('keydown', (e) => {
                     if(document.getElementById('view-dashboard').classList.contains('active') && e.key === 'Enter') { App.start('daily'); }
                 });
             },
+            setTheme(color, el) {
+                this.applyTheme(color);
+                document.querySelectorAll('.color-dot').forEach(d => d.classList.remove('active'));
+                el.classList.add('active');
+                DB.data.config.bgColor = color;
+                DB.save();
+            },
+            applyTheme(color) { document.body.style.backgroundColor = color; },
             previewVoice(voiceVal) { this.saveVoiceConfig(); SpeechEngine.testVoice(voiceVal); },
             saveVoiceConfig() {
                 const cfg = {
